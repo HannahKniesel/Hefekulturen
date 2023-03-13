@@ -12,7 +12,7 @@ cols = np.array(["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"
 def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, MIN_COLONY_SIZE, P_VALUE_NULLHYPOTHESIS, log_dir):
     quadruples = generate_quadruples(sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, MIN_COLONY_SIZE)
     highlights, quadruples = significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS)
-    highlights_absolute, quadruples = absolute_sizes(sizes_reference, quadruples, experiment_plate)
+    highlights_absolute, quadruples = absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate)
     highlights_both = combine(highlights,highlights_absolute)
     visualize(highlights, highlights_absolute, highlights_both,  sizes_experiment, sizes_reference, experiment_plate, reference_plate, quadruples, P_VALUE_NULLHYPOTHESIS, log_dir)
     return quadruples
@@ -60,8 +60,8 @@ def significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS)
             highlights[quad.x_px_s:quad.x_px_e, quad.y_px_s:quad.y_px_e, 0] = 255
     return highlights, quadruples
 
-def absolute_sizes(sizes_reference, quadruples, experiment_plate):
-    median_size_reference = np.median(sizes_reference)
+def absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate):
+    median_size_reference = np.median(sizes_experiment)
     for quad in quadruples:
         if((np.all(quad.quadrupelA.sizes_exp>median_size_reference)) or (np.all(quad.quadrupelB.sizes_exp > median_size_reference))):
             quad.bigger_than_median = True

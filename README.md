@@ -1,8 +1,8 @@
 # Getting Started 
 
 ~~~
-git clone .. 
-cd Dir/
+git clone https://github.com/HannahKniesel/Hefekulturen.git 
+cd Hefekulturen
 
 conda create --name hefekulturen python=3.11.0 
 conda activate hefekulturen

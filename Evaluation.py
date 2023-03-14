@@ -9,12 +9,13 @@ from Classes import *
 rows = np.array(["1","2","3","4","5","6","7","8","9","10"])
 cols = np.array(["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"])
 
-def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, MIN_COLONY_SIZE, P_VALUE_NULLHYPOTHESIS, log_dir):
+def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, MIN_COLONY_SIZE, P_VALUE_NULLHYPOTHESIS, PERCENTILE, log_dir):
     quadruples = generate_quadruples(sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, MIN_COLONY_SIZE)
     highlights, quadruples = significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS)
-    highlights_absolute, quadruples = absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate)
+    highlights_absolute, quadruples = absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate, PERCENTILE)
     highlights_both = combine(highlights,highlights_absolute)
     visualize(highlights, highlights_absolute, highlights_both,  sizes_experiment, sizes_reference, experiment_plate, reference_plate, quadruples, P_VALUE_NULLHYPOTHESIS, log_dir)
+    quadruples = compute_ordinal_scale(quadruples, P_VALUE_NULLHYPOTHESIS)
     return quadruples
 
 def generate_quadruples(sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, MIN_COLONY_SIZE):
@@ -60,10 +61,10 @@ def significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS)
             highlights[quad.x_px_s:quad.x_px_e, quad.y_px_s:quad.y_px_e, 0] = 255
     return highlights, quadruples
 
-def absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate):
-    median_size_reference = np.median(sizes_experiment)
+def absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate, percentile):
+    minimum_size = np.percentile(sizes_experiment/sizes_reference, percentile)#np.median(sizes_experiment/sizes_reference)
     for quad in quadruples:
-        if((np.all(quad.quadrupelA.sizes_exp>median_size_reference)) or (np.all(quad.quadrupelB.sizes_exp > median_size_reference))):
+        if((np.all(quad.quadrupelA.sizes>minimum_size)) or (np.all(quad.quadrupelB.sizes > minimum_size))):
             quad.bigger_than_median = True
 
 
@@ -203,5 +204,33 @@ def visualize(highlights, highlights_absolute, highlights_both,  sizes_experimen
             axs[2,2].add_patch(rect)
     plt.savefig(log_dir, dpi = 300)
     plt.show()
+
+
+def compute_ordinal_scale(quadruples, P_VALUE_NULLHYPOTHESIS):
+    quadruples = sorted(quadruples, key=lambda quad: quad.p_value, reverse = True)
+    for i,quad in enumerate(quadruples):
+        quad.p_position = i+1
+
+    # [print(quad.p_value, quad.max_mean_growth) for quad in quadruples]
+
+
+    quadruples = sorted(quadruples, key=lambda quad: quad.max_mean_growth)
+    for i,quad in enumerate(quadruples):
+        quad.size_position = i+1
+
+    # [print(quad.p_value, quad.max_mean_growth) for quad in quadruples]
+
+    for quad in quadruples:
+        if((not quad.is_valid) or (quad.p_value >= P_VALUE_NULLHYPOTHESIS) or (not quad.bigger_than_median)):
+            quad.ordinal_scale =-1
+
+        else:
+            quad.ordinal_scale = quad.size_position + quad.p_position
+
+    quadruples = sorted(quadruples, key=lambda quad: quad.ordinal_scale, reverse = True)
+    # [print(quad.p_value, quad.max_mean_growth, quad.ordinal_scale) for quad in quadruples]
+    return quadruples
+
+
 
 

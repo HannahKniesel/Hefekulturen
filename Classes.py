@@ -11,6 +11,7 @@ class Quadrupel():
         else:
             self.is_valid = True
         self.sizes = np.array(sizes_exp/sizes_ref)
+        self.mean_growth = np.mean(self.sizes)
 
 class ABQuadrupel():
     def __init__(self, sizesA_exp, sizesB_exp, sizesA_ref, sizesB_ref, x_px_s, x_px_e, y_px_s, y_px_e, position, name, minimum_size):
@@ -32,6 +33,13 @@ class ABQuadrupel():
         self.statistic, self.p_value = ttest_ind(self.quadrupelA.sizes, self.quadrupelB.sizes, equal_var=False)
 
         self.bigger_than_median = False
+        max_idx = np.argmax((self.quadrupelA.mean_growth, self.quadrupelB.mean_growth))
+        self.bigger_row = ["A","B"][max_idx]
+        self.max_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][max_idx]
+
+        self.ordinal_scale = -1
+        self.size_position = -1
+        self.p_position = -1
 
             
 

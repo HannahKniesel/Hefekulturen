@@ -8,3 +8,4 @@ opencv==4.7.0
 ipykernel==6.20.2
 tqdm==4.64.1
 openpyxl==3.0.10
+scikit-image==0.21.0 

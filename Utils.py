@@ -1,8 +1,9 @@
 from PIL import Image, ImageOps
 import numpy as np
-from sklearn.cluster import KMeans
-from tqdm import tqdm
 import cv2
+import matplotlib.pyplot as plt
+
+from skimage.morphology import opening
 
 
 # returns binary image 
@@ -13,65 +14,91 @@ def open_image(path):
     img_np = np.array(img)
     maximum = img_np.max()
     minimum = img_np.min()
-    img_np = (img_np - minimum) /(maximum - minimum)
-    # init_shape = img_np.shape
-    kmeans = KMeans(n_clusters=2, random_state=0).fit(img_np.reshape(-1,1))
-    kmeans_t = np.mean(kmeans.cluster_centers_)
-    img_np = (img_np>kmeans_t).astype(np.int32)
+    img_np = (((img_np - minimum) /(maximum - minimum))*255).astype(np.uint8)
+
+    blur = cv2.GaussianBlur(img_np,(5,5),0)
+    ret3,img_np = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    img_np = img_np/255
+
+    element = np.ones((7,7))
+    img_np = opening(img_np, element)
     return img_np
 
+def compute_grid(plate, x_expected, y_expected, use_hard_grid, plot = False):
+    plate_x = np.sum(plate, axis = 1)
+    m = np.median(plate_x)
+    plate_x = (plate_x > m).astype(np.uint8)
 
-# find local minima in data
-def find_minima(data):
-    indices = []
-    i = 0
-    # pbar = tqdm(total = len(data))
-    while(i < len(data)):
-        x = data[i]
-        if(i == 0):
-            left_neighbor = 0
-            right_neighbor = data[i+1]
-        elif(i == (len(data)-1)):
-            left_neighbor = data[i-1]
-            right_neighbor = 0
+    xmins_idx = []
+    j = 0
+    for i in range(len(plate_x)-1): 
+        if((plate_x[i] == 0) and (plate_x[i+1] == 1)):
+            w = int((i-j)/2)
+            xmins_idx.append(i-w)
+        if((plate_x[i] == 1) and (plate_x[i+1] == 0)):
+            j = i 
+
+    if(plot):
+        plt.figure(figsize=(10,4))
+        plt.title("X direction")
+        plt.plot(np.arange(plate_x.shape[0]), np.sum(plate, axis = 1))
+        plt.plot(np.arange(plate_x.shape[0]),plate_x*1000)
+        plt.scatter(xmins_idx, np.zeros((len(xmins_idx),)))
+    if((len(xmins_idx) != (y_expected)) or use_hard_grid):
+        if(use_hard_grid):
+            print("WARNING:: Use hard grid in y direction")
+            xmins_idx = np.arange(0,plate_x.shape[0], plate_x.shape[0]/(y_expected)).astype(np.int16).tolist()
         else:
-            left_neighbor = data[i-1]
-            right_neighbor = data[i+1]
+            xmins_idx = remove_double_lines(xmins_idx)
 
-        # if plateau
-        if((left_neighbor > x) and (right_neighbor == x)):
-            num_similars = 0
-            init_i = i
-            while((right_neighbor == x) and ((i+1) < (len(data)-1))):
-                i += 1
-                # pbar.update(1)
-                right_neighbor = data[i+1]
-                num_similars+=1
-            if(right_neighbor > x):
-                indices.append(init_i + (num_similars//2))
-        # if minimum
-        elif((right_neighbor > x) and (left_neighbor > x)):
-            indices.append(i)
+            if(len(xmins_idx) != (y_expected)):
+                print("WARNING:: Use hard grid in y direction")
+                print(len(xmins_idx), y_expected)
 
-        i += 1
-        # pbar.update(1)
+                xmins_idx = np.arange(0,plate_x.shape[0], plate_x.shape[0]/(y_expected)).astype(np.int16).tolist()
+        
+    xmins_idx = xmins_idx[1:]
 
-    # pbar.close()
-    return indices
 
-def compute_grid(plate, erosion_iterations = 4):
-    kernel = np.ones((5, 5), np.uint8)
-    erosion_reference_plate = np.stack((plate,plate,plate), axis = -1)*255
-    erosion_reference_plate = cv2.erode((erosion_reference_plate).astype(np.uint8), kernel, iterations=erosion_iterations)
-    erosion_reference_plate = np.array(erosion_reference_plate)
-    erosion_reference_plate = erosion_reference_plate[:,:,0]
+    plate_y = np.sum(plate, axis = 0)
+    m = np.median(plate_y)
+    plate_y = plate_y > m
+
+    ymins_idx = []
+    j = 0
+    for i in range(1,len(plate_y)-1): 
+        if((plate_y[i] == 0) and (plate_y[i+1] == 1)):
+            w = int((i-j)/2)
+            ymins_idx.append(i-w)
+        if((plate_y[i] == 1) and (plate_y[i+1] == 0)):
+            j = i 
+
+    if(plot):
+        plt.figure(figsize=(10,4))
+        plt.title("Y direction")
+        plt.plot(np.arange(plate_y.shape[0]), np.sum(plate, axis = 0))
+        plt.plot(np.arange(plate_y.shape[0]),plate_y*1000)
+        plt.scatter(ymins_idx, np.zeros((len(ymins_idx),)))
+
+    if((len(ymins_idx) != (x_expected)) or use_hard_grid):
+        if(use_hard_grid):
+            print("WARNING:: Use hard grid in x direction")
+            ymins_idx = np.arange(0,plate_y.shape[0], plate_y.shape[0]/(x_expected)).astype(np.int16).tolist()
+        else: 
+            ymins_idx = remove_double_lines(ymins_idx)
+
+            if(len(ymins_idx) != (x_expected)):
+                print("WARNING:: Use hard grid in x direction")
+                print(len(ymins_idx), x_expected)
+                ymins_idx = np.arange(0,plate_y.shape[0], plate_y.shape[0]/(x_expected)).astype(np.int16).tolist()
+    ymins_idx = ymins_idx[1:]
+
+    rgb_grid = get_rgbgrid(plate, xmins_idx, ymins_idx)
+    sizes, x_start, x_end, y_start, y_end = compute_sizes(plate, xmins_idx, ymins_idx)
+    return rgb_grid, sizes, x_start, x_end, y_start, y_end
+
     
-    #find local minima
-    yaxis = np.max(erosion_reference_plate, axis = 0)
-    xaxis = np.max(erosion_reference_plate, axis = 1)
-    xmins_idx = find_minima(xaxis)
-    ymins_idx = find_minima(yaxis)
-
+def get_rgbgrid(plate, xmins_idx, ymins_idx):
     red = plate.copy()
 
     pixel_width = 5
@@ -84,7 +111,28 @@ def compute_grid(plate, erosion_iterations = 4):
             red[:,i-pixel_width:i+pixel_width] = 1
 
     rgb_grid_img = np.stack((red,plate,plate), axis = -1)*255
-    return rgb_grid_img, xmins_idx, ymins_idx
+    return rgb_grid_img
+
+
+def remove_double_lines(indices):
+    xmins_idx = np.array(indices)
+    x_dist = xmins_idx[1:] - xmins_idx[:-1]
+    percentile_75 = np.percentile(x_dist, 75)
+    percentile_25 = np.percentile(x_dist, 25)
+    iqr = percentile_75 - percentile_25
+    min_outlier = percentile_25-1.5*iqr
+    # min_outlier = 55
+
+    i = 1
+    # for i in range(1,len(xmins_idx)):
+    while(i < len(xmins_idx)):
+        d = xmins_idx[i] - xmins_idx[i-1]
+        if(d<min_outlier):
+            xmins_idx = np.delete(xmins_idx, i)
+        i += 1    
+
+    return xmins_idx.tolist()
+
 
 
 def compute_sizes(plate, xmins_idx, ymins_idx):

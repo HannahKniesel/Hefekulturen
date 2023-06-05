@@ -1,4 +1,4 @@
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, levene, shapiro, wilcoxon, ttest_rel, mannwhitneyu
 import numpy as np
 
 class Quadrupel():
@@ -10,7 +10,8 @@ class Quadrupel():
             self.is_valid = False
         else:
             self.is_valid = True
-        self.sizes = np.array(sizes_exp/sizes_ref)
+        self.sizes = np.array(sizes_exp/(sizes_ref+1e-10))
+
         self.mean_growth = np.mean(self.sizes)
 
 class ABQuadrupel():
@@ -28,14 +29,57 @@ class ABQuadrupel():
             
         else:
             self.is_valid = False
+        
+        if(self.is_valid):
+            # test for normality 
+            stat, p_shapiroA = shapiro(self.quadrupelA.sizes)
+            stat, p_shapiroB = shapiro(self.quadrupelB.sizes)
 
+            # test for equal variances
+            stat, p_levene = levene(self.quadrupelA.sizes, self.quadrupelB.sizes)
+            
+            # when variances are not equal, experiment is not useable?
+            if(p_levene < 0.01):
+                self.statistic, self.p_value = np.inf, np.inf
+
+            elif(np.any(np.array([p_shapiroA, p_shapiroB])<0.01)):
+                # normalverteilung kann nicht angenommen werden 
+                # print("Use wilcox: Shapiro A = "+str(p_shapiroA)+ " | Shapiro B = "+str(p_shapiroB) + " | Levenes = "+str(p_levene))
+                self.statistic, self.p_value = wilcoxon(self.quadrupelA.sizes, self.quadrupelB.sizes)
+                # self.statistic, self.p_value = mannwhitneyu(self.quadrupelA.sizes, self.quadrupelB.sizes)
+            else: 
+                # print("Use ttest")
+                self.statistic, self.p_value = ttest_rel(self.quadrupelA.sizes, self.quadrupelB.sizes)
+                # self.statistic, self.p_value = ttest_ind(self.quadrupelA.sizes, self.quadrupelB.sizes, equal_var=True)
+
+        else: 
+            self.statistic, self.p_value = np.inf, np.inf
+
+        if(not self.p_value == np.inf):
+            means = (np.mean(self.quadrupelA.sizes) - np.mean(self.quadrupelB.sizes))
+            stds = np.sqrt(((np.std(self.quadrupelA.sizes) ** 2) + (np.std(self.quadrupelB.sizes) ** 2))/2)
+            self.effect_size = np.abs(means/stds) 
+        else: 
+            self.effect_size = 0
+
+        # print("Equal variances: "+str(p)+" are "+str((p>0.01)))
         # find significance in difference
-        self.statistic, self.p_value = ttest_ind(self.quadrupelA.sizes, self.quadrupelB.sizes, equal_var=False)
+        # self.statistic, self.p_value = ttest_ind(self.quadrupelA.sizes, self.quadrupelB.sizes, equal_var=True)
+        # self.statistic, self.p_value = mannwhitneyu(self.quadrupelA.sizes, self.quadrupelB.sizes)
+
 
         self.bigger_than_median = False
         max_idx = np.argmax((self.quadrupelA.mean_growth, self.quadrupelB.mean_growth))
+        min_idx = np.argmin((self.quadrupelA.mean_growth, self.quadrupelB.mean_growth))
+
         self.bigger_row = ["A","B"][max_idx]
         self.max_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][max_idx]
+        self.min_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][min_idx]
+        self.diff_growth = np.abs(self.max_mean_growth - self.min_mean_growth)
+
+        
+       
+
 
         self.ordinal_scale = -1
         self.size_position = -1

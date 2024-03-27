@@ -3,10 +3,10 @@ import numpy as np
 
 class Quadrupel():
     def __init__(self, sizes_exp, sizes_ref, minimum_size):
-        self.sizes_exp = [size for size in sizes_exp if (size >= minimum_size) ]
-        self.sizes_ref = [size for size in sizes_ref if (size >= minimum_size) ]
+        self.sizes_exp = [size if (size >= minimum_size) else -1 for size in sizes_exp]
+        self.sizes_ref = [size if (size >= minimum_size) else -1 for size in sizes_ref]
 
-        if((len(self.sizes_exp)<4) or (len(self.sizes_ref)<4)):
+        if((-1 in self.sizes_exp) or (-1 in self.sizes_ref)):
             self.is_valid = False
         else:
             self.is_valid = True
@@ -39,7 +39,7 @@ class ABQuadrupel():
             self.reason = "Missing values in quadrupel."
             print(f"WARNING::Exclude {self.name} at position {self.position} from evaluation. Found inaccuracy on reference plate: Missing values in quadrupel.")
         
-        
+        # only apply statistical test when there are 4 samples.
         if(self.is_valid):
             # test for normality 
             stat, p_shapiroA = shapiro(self.quadrupelA.sizes)
@@ -51,6 +51,10 @@ class ABQuadrupel():
             # when variances are not equal, experiment is not useable?
             if(p_levene < 0.01):
                 self.statistic, self.p_value = np.inf, np.inf
+                self.is_valid = False
+                self.reason = "Variances of row A and B are not equal. A comparison is not recommended."
+                print(f"WARNING::Exclude {self.name} at position {self.position} from evaluation. {self.reason}")
+
 
             elif(np.any(np.array([p_shapiroA, p_shapiroB])<0.01)):
                 # normalverteilung kann nicht angenommen werden 
@@ -91,7 +95,7 @@ class ABQuadrupel():
         self.size_position = -1
         self.p_position = -1
 
-        self.absolute_size = np.max((np.min(self.quadrupelA.sizes), np.min(self.quadrupelB.sizes)))
+        self.absolute_size = np.max((np.mean(self.quadrupelA.sizes), np.mean(self.quadrupelB.sizes))) #np.max((np.min(self.quadrupelA.sizes), np.min(self.quadrupelB.sizes)))
 
 
             

@@ -51,7 +51,7 @@ def check_reference_plate(quadruples):
                 quad.is_valid = False
                 quad.reason = "Inaccuracy on reference plate. Reliable normalization not possible as difference in row A to B differs from others in same row."
                 print(f"WARNING::Exclude {quad.name} at position {quad.position} from evaluation. Found inaccuracy on reference plate: Reliable normalization not possible as difference in row A to B differs from others in same row.")
-
+    
         
 
 
@@ -62,8 +62,9 @@ def check_reference_plate(quadruples):
         q75, q25 = np.percentile(values, [75 ,25])
         iqr = q75 - q25
 
-        minimum = q25 - (1.5*iqr)
-        maximum = q75 + (1.5*iqr)
+        irange = 1.5
+        minimum = q25 - (irange*iqr)
+        maximum = q75 + (irange*iqr)
         rows_mean_diff[row] = (maximum,minimum)
     print(f"Collected row means = {rows_mean_diff}")
 
@@ -72,11 +73,11 @@ def check_reference_plate(quadruples):
         row = quad.position[0]
         maximum,minimum = rows_mean_diff[row]
         if((rsd < minimum) or (rsd > maximum)): 
-            print("INFO::outlier difference on reference plate. Measurement cannot be considered.")
-            print(f"INFO:: Current value = {rsd} | q25 = {q25} | q75 = {q75} | position = {quad.position}")
             quad.is_valid = False
-            quad.reason = "Error on reference plate. Difference in row A to B differs from others in same row."
+            quad.reason = "Inaccuracy on reference plate. Reliable normalization not possible as difference in row A to B differs from others in same row."
+            print(f"WARNING::Exclude {quad.name} at position {quad.position} from evaluation. Found inaccuracy on reference plate: Reliable normalization not possible as difference in row A to B differs from others in same row.")
     """
+    
     return quadruples
 
 # only removes really hard outliers 

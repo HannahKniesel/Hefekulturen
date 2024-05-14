@@ -86,6 +86,7 @@ class ABQuadrupel():
         max_idx = np.argmax((self.quadrupelA.mean_growth, self.quadrupelB.mean_growth))
         min_idx = np.argmin((self.quadrupelA.mean_growth, self.quadrupelB.mean_growth))
 
+        self.growthfactor = self.quadrupelA.mean_growth / (self.quadrupelB.mean_growth + 1e-10)
         self.bigger_row = ["A","B"][max_idx]
         self.max_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][max_idx]
         self.min_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][min_idx]

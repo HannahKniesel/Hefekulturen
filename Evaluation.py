@@ -22,7 +22,34 @@ def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_referenc
     highlights_both = combine(highlights,highlights_absolute)
     visualize(highlights, highlights_absolute, highlights_both,  sizes_experiment, sizes_reference, experiment_plate, reference_plate, quadruples, P_VALUE_NULLHYPOTHESIS, log_dir)
     quadruples = compute_ordinal_scale(quadruples, P_VALUE_NULLHYPOTHESIS)
+    quadruples = sort_quadruples(quadruples, P_VALUE_NULLHYPOTHESIS, minimum_size)
     return quadruples, minimum_size
+
+def sort_quadruples(quadruples, P_VALUE_NULLHYPOTHESIS, minimum_size):
+    curr_idx = 0 
+    sorted_quadruples = []
+    # sort all that are significant in exp 1 and 2 
+    sorted_quadruples += [quad for quad in quadruples if ((quad.p_value<P_VALUE_NULLHYPOTHESIS) and (quad.absolute_size>minimum_size) and quad.is_valid)]
+    sorted_quadruples = sorted(sorted_quadruples, key = lambda x: x.effect_size, reverse=True)
+    curr_idx = len(sorted_quadruples)
+
+    # sort all that are significant in exp 2
+    sorted_quadruples += [quad for quad in quadruples if ((quad.p_value<P_VALUE_NULLHYPOTHESIS) and (quad.absolute_size<minimum_size) and quad.is_valid)]
+    sorted_quadruples[curr_idx:] = sorted(sorted_quadruples[curr_idx:], key = lambda x: x.effect_size, reverse=True)
+    curr_idx = len(sorted_quadruples)
+
+    # sort all that are significant in exp 1
+    sorted_quadruples += [quad for quad in quadruples if ((quad.p_value>P_VALUE_NULLHYPOTHESIS) and (quad.absolute_size>minimum_size) and quad.is_valid)]
+    sorted_quadruples[curr_idx:] = sorted(sorted_quadruples[curr_idx:], key = lambda x: x.absolute_size, reverse=True)
+    curr_idx = len(sorted_quadruples)
+
+    # add all that are not significant in both 
+    sorted_quadruples += [quad for quad in quadruples if ((not quad in sorted_quadruples) and quad.is_valid)]
+
+    # add remaining
+    sorted_quadruples += [quad for quad in quadruples if (not quad in sorted_quadruples)]
+
+    return sorted_quadruples
 
 # checks if there might be errors on the reference plate, and if so remove those from evaluation
 def check_reference_plate(quadruples):

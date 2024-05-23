@@ -13,15 +13,15 @@ heatmap = [[45, 234, 64, 255], [59, 191, 79, 255], [79, 156, 108, 255], [76, 118
 rows = np.array(["1","2","3","4","5","6","7","8","9","10"])
 cols = np.array(["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"])
 
-def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, layout_names, MIN_COLONY_SIZE, P_VALUE_NULLHYPOTHESIS, PERCENTILE, log_dir):
+def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, layout_names, MIN_COLONY_SIZE, P_VALUE_NULLHYPOTHESIS, log_dir):
     quadruples = generate_quadruples(sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, layout_names, MIN_COLONY_SIZE)
-    quadruples = remove_outliers(quadruples)
+    # quadruples = remove_outliers(quadruples)
     quadruples = check_reference_plate(quadruples)
     highlights, quadruples = significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS)
-    highlights_absolute, quadruples, minimum_size = absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate, PERCENTILE)
+    highlights_absolute, quadruples, minimum_size = absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate)
     highlights_both = combine(highlights,highlights_absolute)
     visualize(highlights, highlights_absolute, highlights_both,  sizes_experiment, sizes_reference, experiment_plate, reference_plate, quadruples, P_VALUE_NULLHYPOTHESIS, log_dir)
-    quadruples = compute_ordinal_scale(quadruples, P_VALUE_NULLHYPOTHESIS)
+    # quadruples = compute_ordinal_scale(quadruples, P_VALUE_NULLHYPOTHESIS)
     quadruples = sort_quadruples(quadruples, P_VALUE_NULLHYPOTHESIS, minimum_size)
     return quadruples, minimum_size
 
@@ -173,6 +173,7 @@ def generate_quadruples(sizes_experiment, sizes_reference, x_start, x_end, y_sta
         pos_x = pos_x % (sizes_experiment.shape[0]//4)
     return quadruples
 
+# visualization purposes
 def significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS):
     highlights = np.zeros_like(experiment_plate)
     highlights = np.stack((highlights,highlights,highlights,highlights), axis = -1)
@@ -182,36 +183,32 @@ def significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS)
         if(quad.is_valid and (quad.p_value < P_VALUE_NULLHYPOTHESIS)):
             effect_sizes.append(quad.effect_size)
 
-    p2,p4,p6,p8 = np.percentile(effect_sizes, [20,40,60,80])
+    # p2,p4,p6,p8 = np.percentile(effect_sizes, [20,40,60,80])
+    e_small, e_medium, e_large = np.percentile(effect_sizes, [25,50,75]) # 0.2, 0.5, 0.8
 
     for quad in quadruples: 
         if(quad.is_valid and (quad.p_value < P_VALUE_NULLHYPOTHESIS)):
             color = heatmap[4]
-            if(quad.effect_size > p2):
+            if(quad.effect_size > e_small):
                 color = heatmap[3]
-            if(quad.effect_size > p4):
+            if(quad.effect_size > e_medium):
                 color = heatmap[2]
-            if(quad.effect_size > p6):
+            if(quad.effect_size > e_large):
                 color = heatmap[1]
-            if(quad.effect_size > p8):
-                color = heatmap[0]
             highlights[quad.x_px_s:quad.x_px_e, quad.y_px_s:quad.y_px_e, :] = color
         if(quad.is_valid == False):
             highlights[quad.x_px_s:quad.x_px_e, quad.y_px_s:quad.y_px_e, :] = [255,0,0,180]
     return highlights.astype(np.uint8), quadruples
 
-def absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate, percentile):
+def absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate):
     sizes = sizes_experiment/(sizes_reference+1e-10)
-    if(percentile == -1):
-        percentile_75 = np.percentile(sizes, 75)
-        percentile_25 = np.percentile(sizes, 25)
-        iqr = percentile_75 - percentile_25
-        max_outlier = percentile_75+1.5*iqr
-        # min_outlier = percentile_25-1.5*iqr
-        minimum_size = max_outlier
-    else:
-        minimum_size = np.percentile(sizes, percentile)#np.median(sizes_experiment/sizes_reference)
-    
+    percentile_75 = np.percentile(sizes, 75)
+    percentile_25 = np.percentile(sizes, 25)
+    iqr = percentile_75 - percentile_25
+    max_outlier = percentile_75+1.5*iqr
+    # min_outlier = percentile_25-1.5*iqr
+    minimum_size = max_outlier
+
     absolute_sizes = []
     for quad in quadruples:
         if(quad.absolute_size>minimum_size): #(np.all(quad.quadrupelA.sizes>minimum_size)) or (np.all(quad.quadrupelB.sizes > minimum_size))):
@@ -219,7 +216,7 @@ def absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_pla
             if(quad.is_valid):
                 absolute_sizes.append(quad.absolute_size)
     
-    p2,p4,p6,p8 = np.percentile(absolute_sizes, [20,40,60,80])
+    e_small, e_medium, e_large = np.percentile(absolute_sizes, [25,50,75]) # 0.2, 0.5, 0.8
 
     highlights_absolute = np.zeros_like(experiment_plate)
     highlights_absolute = np.stack((highlights_absolute,highlights_absolute,highlights_absolute, highlights_absolute), axis = -1)
@@ -228,14 +225,12 @@ def absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_pla
         if(quad.is_valid and (quad.bigger_than_median)):
             # highlights_absolute[quad.x_px_s:quad.x_px_e, quad.y_px_s:quad.y_px_e, 1] = 255
             color = heatmap[4]
-            if(quad.absolute_size > p2):
+            if(quad.absolute_size > e_small):
                 color = heatmap[3]
-            if(quad.absolute_size > p4):
+            if(quad.absolute_size > e_medium):
                 color = heatmap[2]
-            if(quad.absolute_size > p6):
+            if(quad.absolute_size > e_large):
                 color = heatmap[1]
-            if(quad.absolute_size > p8):
-                color = heatmap[0]
             highlights_absolute[quad.x_px_s:quad.x_px_e, quad.y_px_s:quad.y_px_e, :] = color
 
         if(quad.is_valid == False):

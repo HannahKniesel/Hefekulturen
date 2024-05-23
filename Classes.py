@@ -1,6 +1,18 @@
 from scipy.stats import ttest_ind, levene, shapiro, wilcoxon, ttest_rel, mannwhitneyu
 import numpy as np
 
+def cohend(d1, d2):
+    # calculate the size of samples
+    n1, n2 = len(d1), len(d2)
+    # calculate the variance of the samples
+    s1, s2 = np.var(d1, ddof=1), np.var(d2, ddof=1)
+    # calculate the pooled standard deviation
+    s = np.sqrt(((n1 - 1) * s1 + (n2 - 1) * s2) / (n1 + n2 - 2))
+    # calculate the means of the samples
+    u1, u2 = np.mean(d1), np.mean(d2)
+    # calculate the effect size
+    return (u1 - u2) / s
+
 class Quadrupel():
     def __init__(self, sizes_exp, sizes_ref, minimum_size):
         self.sizes_exp = [size if (size >= minimum_size) else -1 for size in sizes_exp]
@@ -37,7 +49,8 @@ class ABQuadrupel():
         else:
             self.is_valid = False
             self.reason = "Missing values in quadrupel."
-            print(f"WARNING::Exclude {self.name} at position {self.position} from evaluation. Found inaccuracy on reference plate: Missing values in quadrupel.")
+            print(f"WARNING::Exclude {self.name} at position {self.position} from evaluation. {self.reason}")
+
         
         # only apply statistical test when there are 4 samples.
         if(self.is_valid):
@@ -51,6 +64,7 @@ class ABQuadrupel():
             # when variances are not equal, experiment is not useable?
             if(p_levene < 0.01):
                 self.statistic, self.p_value = np.inf, np.inf
+                self.effect_size = 0
                 self.is_valid = False
                 self.reason = "Variances of row A and B are not equal. A comparison is not recommended."
                 print(f"WARNING::Exclude {self.name} at position {self.position} from evaluation. {self.reason}")
@@ -58,44 +72,52 @@ class ABQuadrupel():
 
             elif(np.any(np.array([p_shapiroA, p_shapiroB])<0.01)):
                 # normalverteilung kann nicht angenommen werden 
-                # print("Use wilcox: Shapiro A = "+str(p_shapiroA)+ " | Shapiro B = "+str(p_shapiroB) + " | Levenes = "+str(p_levene))
+                self.is_valid = False
+                self.reason = "Normality of the samples cannot be assumed. T-test is not applicable. We will apply wilcoxon test."
                 self.statistic, self.p_value = wilcoxon(self.quadrupelA.sizes, self.quadrupelB.sizes)
-                # self.statistic, self.p_value = mannwhitneyu(self.quadrupelA.sizes, self.quadrupelB.sizes)
+                print(f"WARNING::Exclude {self.name} at position {self.position} from evaluation. {self.reason}")
+                # Compute effect size (r)
+                N = len(self.quadrupelA.sizes)
+                self.effect_size = self.statistic / np.sqrt(N)
+
             else: 
-                # print("Use ttest")
                 self.statistic, self.p_value = ttest_rel(self.quadrupelA.sizes, self.quadrupelB.sizes)
-                # self.statistic, self.p_value = ttest_ind(self.quadrupelA.sizes, self.quadrupelB.sizes, equal_var=True)
+
+                
+
+
+                # Compute effect size by Cohen's d
+                self.effect_size = cohend(self.quadrupelA.sizes, self.quadrupelB.sizes)
+                # Compute mean difference
+                # mean_diff = np.mean(self.quadrupelA.sizes - self.quadrupelB.sizes)
+                # # Compute standard deviation of the differences
+                # sd_diff = np.std(self.quadrupelA.sizes - self.quadrupelB.sizes, ddof=1)  # ddof=1 for sample standard deviation
+                # # Compute Cohen's d
+                # self.effect_size = mean_diff / sd_diff
+
+               
 
         else: 
             self.statistic, self.p_value = np.inf, np.inf
-
-        if(not self.p_value == np.inf):
-            means = (np.mean(self.quadrupelA.sizes) - np.mean(self.quadrupelB.sizes))
-            stds = np.sqrt(((np.std(self.quadrupelA.sizes) ** 2) + (np.std(self.quadrupelB.sizes) ** 2))/2)
-            self.effect_size = np.abs(means/stds) 
-        else: 
             self.effect_size = 0
 
-        # print("Equal variances: "+str(p)+" are "+str((p>0.01)))
-        # find significance in difference
-        # self.statistic, self.p_value = ttest_ind(self.quadrupelA.sizes, self.quadrupelB.sizes, equal_var=True)
-        # self.statistic, self.p_value = mannwhitneyu(self.quadrupelA.sizes, self.quadrupelB.sizes)
 
 
         self.bigger_than_median = False
         max_idx = np.argmax((self.quadrupelA.mean_growth, self.quadrupelB.mean_growth))
-        min_idx = np.argmin((self.quadrupelA.mean_growth, self.quadrupelB.mean_growth))
+        # min_idx = np.argmin((self.quadrupelA.mean_growth, self.quadrupelB.mean_growth))
+        self.bigger_row = ["A","B"][max_idx]
 
         self.growthfactor = self.quadrupelA.mean_growth / (self.quadrupelB.mean_growth + 1e-10)
-        self.bigger_row = ["A","B"][max_idx]
-        self.max_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][max_idx]
-        self.min_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][min_idx]
-        self.diff_growth = np.abs(self.max_mean_growth - self.min_mean_growth)
+        # self.max_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][max_idx]
+        # self.min_mean_growth = [self.quadrupelA.mean_growth, self.quadrupelB.mean_growth][min_idx]
+        # self.diff_growth = np.abs(self.max_mean_growth - self.min_mean_growth)
 
-        self.ordinal_scale = -1
-        self.size_position = -1
-        self.p_position = -1
+        # self.ordinal_scale = -1
+        # self.size_position = -1
+        # self.p_position = -1
 
+        # mean growth of bigger quadruple, used for Exp1: growth of colonies in comparison to others on plate
         self.absolute_size = np.max((np.mean(self.quadrupelA.sizes), np.mean(self.quadrupelB.sizes))) #np.max((np.min(self.quadrupelA.sizes), np.min(self.quadrupelB.sizes)))
 
 

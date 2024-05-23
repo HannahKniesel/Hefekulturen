@@ -2,9 +2,20 @@ from PIL import Image, ImageOps
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-
+from pathlib import Path
 from skimage.morphology import opening
+from Read_Platelayouts import load_layout
+import os
+import platform
+import subprocess
 
+def open_file_explorer(path='.'):
+    if platform.system() == 'Windows':
+        os.startfile(os.path.abspath(path))
+    elif platform.system() == 'Darwin':
+        subprocess.Popen(['open', os.path.abspath(path)])
+    else:
+        subprocess.Popen(['xdg-open', os.path.abspath(path)])
 
 # returns binary image 
 def open_image(path):
@@ -204,3 +215,30 @@ def combined_highlights(highlights_absolute, highlights):
     highlights_both[:,:,0] = highlights[:,:,0]
     return highlights_both
     
+
+def min_max_norm(v):
+    minimum = v.min()
+    maximum = v.max()
+    return (v-minimum)/(maximum-minimum)
+
+def setup_layout(path_to_reference_plate):
+    if("A_" in Path(path_to_reference_plate).stem):
+        layout = "A"
+        x_expected = 48 
+        y_expected = 32 
+        layout_names = load_layout('Plate_Layouts/MPA.csv')
+    elif("B_" in Path(path_to_reference_plate).stem):
+        layout = "B"
+        x_expected = 48 
+        y_expected = 32 
+        layout_names = load_layout('Plate_Layouts/MPB.csv')
+    elif("C_" in Path(path_to_reference_plate).stem):
+        layout = "C"
+        x_expected = 48 
+        y_expected = 28 
+        layout_names = load_layout('Plate_Layouts/MPCD.csv')
+
+    print(f"Use Layout {layout} with {x_expected} columns and {y_expected} rows.")
+    return x_expected, y_expected, layout_names
+
+

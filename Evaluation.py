@@ -16,7 +16,7 @@ cols = np.array(["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"
 def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, layout_names, MIN_COLONY_SIZE, P_VALUE_NULLHYPOTHESIS, log_dir):
     quadruples = generate_quadruples(sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, layout_names, MIN_COLONY_SIZE)
     # quadruples = remove_outliers(quadruples)
-    quadruples = check_reference_plate(quadruples)
+    # quadruples = check_reference_plate(quadruples)
     highlights, quadruples = significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS)
     highlights_absolute, quadruples, minimum_size = absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate)
     highlights_both = combine(highlights,highlights_absolute)

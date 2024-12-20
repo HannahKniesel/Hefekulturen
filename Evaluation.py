@@ -13,17 +13,24 @@ heatmap = [[45, 234, 64, 255], [59, 191, 79, 255], [79, 156, 108, 255], [76, 118
 rows = np.array(["1","2","3","4","5","6","7","8","9","10"])
 cols = np.array(["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"])
 
-def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, layout_names, MIN_COLONY_SIZE, P_VALUE_NULLHYPOTHESIS, log_dir):
+def min_max_norm(values):
+    minimum = values.min()
+    maximum = values.max()
+    return(values-minimum)/(maximum-minimum)
+
+def evaluate(experiment_plate, reference_plate, sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, layout_names, MIN_COLONY_SIZE, P_VALUE_NULLHYPOTHESIS, log_dir = ""):
     quadruples = generate_quadruples(sizes_experiment, sizes_reference, x_start, x_end, y_start, y_end, layout_names, MIN_COLONY_SIZE)
     # quadruples = remove_outliers(quadruples)
     # quadruples = check_reference_plate(quadruples)
     highlights, quadruples = significant_difference(experiment_plate, quadruples, P_VALUE_NULLHYPOTHESIS)
     highlights_absolute, quadruples, minimum_size = absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_plate)
     highlights_both = combine(highlights,highlights_absolute)
-    visualize(highlights, highlights_absolute, highlights_both,  sizes_experiment, sizes_reference, experiment_plate, reference_plate, quadruples, P_VALUE_NULLHYPOTHESIS, log_dir)
+    normalized_plate = (min_max_norm(sizes_experiment/(sizes_reference+1e-10))*255).astype(np.uint8)
+    if(log_dir):
+        visualize(highlights, highlights_absolute, highlights_both,  sizes_experiment, sizes_reference, experiment_plate, reference_plate, quadruples, P_VALUE_NULLHYPOTHESIS, log_dir)
     # quadruples = compute_ordinal_scale(quadruples, P_VALUE_NULLHYPOTHESIS)
     quadruples = sort_quadruples(quadruples, P_VALUE_NULLHYPOTHESIS, minimum_size)
-    return quadruples, minimum_size
+    return quadruples, minimum_size, reference_plate.astype(np.uint8), experiment_plate.astype(np.uint8), normalized_plate, highlights_absolute.astype(np.uint8), highlights.astype(np.uint8), highlights_both.astype(np.uint8) 
 
 def sort_quadruples(quadruples, P_VALUE_NULLHYPOTHESIS, minimum_size):
     curr_idx = 0 
@@ -205,9 +212,9 @@ def absolute_sizes(sizes_reference, sizes_experiment, quadruples, experiment_pla
     percentile_75 = np.percentile(sizes, 75)
     percentile_25 = np.percentile(sizes, 25)
     iqr = percentile_75 - percentile_25
-    max_outlier = percentile_75+1.5*iqr
-    # min_outlier = percentile_25-1.5*iqr
-    minimum_size = max_outlier
+    # max_outlier = percentile_75+1.5*iqr
+    min_outlier = percentile_25-1.5*iqr
+    minimum_size = min_outlier
 
     absolute_sizes = []
     for quad in quadruples:
@@ -247,8 +254,7 @@ def combine(highlights,highlights_absolute):
 
 
 def visualize(highlights, highlights_absolute, highlights_both,  sizes_experiment, sizes_reference, experiment_plate, reference_plate, quadruples, P_VALUE_NULLHYPOTHESIS, log_dir):
-    tick_distance_y = highlights.shape[0] / ((sizes_experiment.shape[0]//4))
-    tick_distance_x = highlights.shape[1] / ((sizes_experiment.shape[1]//2))
+   
     num_y, num_x = sizes_experiment.shape
     num_x = num_x//2
     num_y = num_y//4
@@ -262,8 +268,8 @@ def visualize(highlights, highlights_absolute, highlights_both,  sizes_experimen
 
     # print(highlights)
     # print(highlights.shape)
-    normalized_plate[normalized_plate>max_outlier] = 0
-    normalized_plate[normalized_plate<min_outlier] = 0
+    # normalized_plate[normalized_plate>max_outlier] = 0
+    # normalized_plate[normalized_plate<min_outlier] = 0
     # normalized_plate[highlights[:,:,0]==255] = 0
 
     for quad in quadruples:
@@ -271,6 +277,10 @@ def visualize(highlights, highlights_absolute, highlights_both,  sizes_experimen
             y = np.argwhere(cols == quad.position[1])
             x =  np.argwhere(rows == quad.position[0])
             normalized_plate[int(x*4):int(x*4+4),int(y*2):int(y*2+2)] = 0
+
+    tick_distance_y = highlights.shape[0] / ((sizes_experiment.shape[0]//4))
+    tick_distance_x = highlights.shape[1] / ((sizes_experiment.shape[1]//2))
+
     s = 7
     fig, axs = plt.subplots(2, 3, figsize=(s*3,s*2))
     plt.suptitle("Results")
@@ -310,128 +320,6 @@ def visualize(highlights, highlights_absolute, highlights_both,  sizes_experimen
     axs[1,2].set_xticks(np.linspace(tick_distance_x//2, highlights.shape[1]-(tick_distance_x//2), num=sizes_experiment.shape[1]//2), cols[:sizes_experiment.shape[1]//2])
     axs[1,2].set_yticks(np.linspace(tick_distance_y//2, highlights.shape[0]-(tick_distance_y//2), num=(sizes_experiment.shape[0]//4)), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
     
-
-    """fig, axs = plt.subplots(3,4, figsize=(7*4,7*2))
-
-    axs[0,0].set_ylabel("EXP1\nAbsolut Growth")
-    
-    axs[0,0].set_title("Reference Plate")
-    axs[0,0].imshow(reference_plate, cmap="gray",alpha=1.0)
-    axs[0,0].set_yticks([])
-    axs[0,0].set_xticks([])
-
-    axs[0,1].set_title("Experiment Plate")
-    axs[0,1].imshow(experiment_plate, cmap="gray", alpha=1.0)
-    axs[0,1].set_yticks([])
-    axs[0,1].set_xticks([])
-
-    axs[0,2].set_title("Results\nExperiment Plate")
-    axs[0,2].imshow(experiment_plate, cmap="gray", alpha=1.0)
-    axs[0,2].imshow(highlights_absolute, alpha=0.7)
-    axs[0,2].set_xticks(np.linspace(tick_distance_x//2, highlights.shape[1]-(tick_distance_x//2), num=sizes_experiment.shape[1]//2), cols[:sizes_experiment.shape[1]//2])
-    axs[0,2].set_yticks(np.linspace(tick_distance_y//2, highlights.shape[0]-(tick_distance_y//2), num=(sizes_experiment.shape[0]//4)), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-    
-    axs[0,3].set_title("Normalized Experiment Plate")
-    axs[0,3].imshow(normalized_plate)
-    axs[0,3].set_xticks(np.linspace(0.5, (num_x*2)-1, num=num_x), cols[:sizes_experiment.shape[1]//2])
-    axs[0,3].set_yticks(np.linspace(1, (num_y*4)-2, num=num_y), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-    
-    
-    
-    axs[1,0].set_ylabel("EXP2\nSignificant differences\n between A and B")
-    axs[1,0].set_title("Reference Plate")
-    axs[1,0].imshow(highlights, alpha=1.0)
-    axs[1,0].imshow(reference_plate, cmap="gray",alpha=0.5)
-    axs[1,0].set_xticks(np.linspace(tick_distance_x//2, highlights.shape[1]-(tick_distance_x//2), num=sizes_experiment.shape[1]//2), cols[:sizes_experiment.shape[1]//2])
-    axs[1,0].set_yticks(np.linspace(tick_distance_y//2, highlights.shape[0]-(tick_distance_y//2), num=(sizes_experiment.shape[0]//4)), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-    
-    axs[1,1].set_title("Experiment plate")
-    axs[1,1].imshow(highlights, alpha=1.0)
-    axs[1,1].imshow(experiment_plate, cmap="gray", alpha=0.5)
-    axs[1,1].set_xticks(np.linspace(tick_distance_x//2, highlights.shape[1]-(tick_distance_x//2), num=sizes_experiment.shape[1]//2), cols[:sizes_experiment.shape[1]//2])
-    axs[1,1].set_yticks(np.linspace(tick_distance_y//2, highlights.shape[0]-(tick_distance_y//2), num=(sizes_experiment.shape[0]//4)), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-    
-    axs[1,2].set_title("Normalized experiment plate")
-    axs[1,2].imshow(normalized_plate)
-    axs[1,2].set_xticks(np.linspace(0.5, (num_x*2)-1, num=num_x), cols[:sizes_experiment.shape[1]//2])
-    axs[1,2].set_yticks(np.linspace(1, (num_y*4)-2, num=num_y), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-    
-    axs[1,3].set_title("Green - significant difference in sizes\nRed - invalid experiment")
-    axs[1,3].imshow(highlights, alpha=0.5)
-    axs[1,3].set_xticks(np.linspace(tick_distance_x//2, highlights.shape[1]-(tick_distance_x//2), num=sizes_experiment.shape[1]//2), cols[:sizes_experiment.shape[1]//2])
-    axs[1,3].set_yticks(np.linspace(tick_distance_y//2, highlights.shape[0]-(tick_distance_y//2), num=(sizes_experiment.shape[0]//4)), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-
-
-    
-    axs[2,0].set_ylabel("EXP1 + EXP2\nCombination")
-    axs[2,0].set_title("Reference plate")
-    axs[2,0].imshow(highlights_both, alpha=1.0)
-    axs[2,0].imshow(reference_plate, cmap="gray",alpha=0.5)
-    axs[2,0].set_xticks(np.linspace(tick_distance_x//2, highlights.shape[1]-(tick_distance_x//2), num=sizes_experiment.shape[1]//2), cols[:sizes_experiment.shape[1]//2])
-    axs[2,0].set_yticks(np.linspace(tick_distance_y//2, highlights.shape[0]-(tick_distance_y//2), num=(sizes_experiment.shape[0]//4)), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-    
-    axs[2,1].set_title("Experiment plate")
-    axs[2,1].imshow(highlights_both, alpha=1.0)
-    axs[2,1].imshow(experiment_plate, cmap="gray", alpha=0.5)
-    axs[2,1].set_xticks(np.linspace(tick_distance_x//2, highlights.shape[1]-(tick_distance_x//2), num=sizes_experiment.shape[1]//2), cols[:sizes_experiment.shape[1]//2])
-    axs[2,1].set_yticks(np.linspace(tick_distance_y//2, highlights.shape[0]-(tick_distance_y//2), num=(sizes_experiment.shape[0]//4)), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-    
-    axs[2,2].set_title("Normalized experiment plate")
-    axs[2,2].imshow(normalized_plate)
-    axs[2,2].set_xticks(np.linspace(0.5, (num_x*2)-1, num=num_x), cols[:sizes_experiment.shape[1]//2])
-    axs[2,2].set_yticks(np.linspace(1, (num_y*4)-2, num=num_y), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-
-    axs[2,3].set_title("Green - significant difference in sizes\nRed - invalid experiment")
-    axs[2,3].imshow(highlights_both, alpha=0.5)
-    axs[2,3].set_xticks(np.linspace(tick_distance_x//2, highlights.shape[1]-(tick_distance_x//2), num=sizes_experiment.shape[1]//2), cols[:sizes_experiment.shape[1]//2])
-    axs[2,3].set_yticks(np.linspace(tick_distance_y//2, highlights.shape[0]-(tick_distance_y//2), num=(sizes_experiment.shape[0]//4)), np.arange((sizes_experiment.shape[0]//4))+1) # TODO do by grid lines
-
-
-    for quad in quadruples:
-        if(quad.is_valid and (quad.p_value < P_VALUE_NULLHYPOTHESIS)):
-            y = np.argwhere(cols == quad.position[1])*2-0.5
-            x =  np.argwhere(rows == quad.position[0])*4 -0.5
-            w = 2
-            h = 4
-            rect = patches.Rectangle((y-.1, x-.1),w, h, linewidth=1.5, edgecolor='g', facecolor='none')
-            axs[0,3].add_patch(rect)
-        if(quad.is_valid == False):
-            y = np.argwhere(cols == quad.position[1])*2-0.5
-            x =  np.argwhere(rows == quad.position[0])*4 -0.5
-            w = 2
-            h = 4
-            rect = patches.Rectangle((y, x),w, h, linewidth=1.5, edgecolor='r', facecolor='none')
-            axs[0,3].add_patch(rect)
-
-        if(quad.is_valid and (quad.bigger_than_median)):
-            y = np.argwhere(cols == quad.position[1])*2-0.5
-            x =  np.argwhere(rows == quad.position[0])*4 -0.5
-            w = 2
-            h = 4
-            rect = patches.Rectangle((y-.1, x-.1),w, h, linewidth=1.5, edgecolor='g', facecolor='none')
-            axs[1,3].add_patch(rect)
-        if(quad.is_valid == False):
-            y = np.argwhere(cols == quad.position[1])*2-0.5
-            x =  np.argwhere(rows == quad.position[0])*4 -0.5
-            w = 2
-            h = 4
-            rect = patches.Rectangle((y, x),w, h, linewidth=1.5, edgecolor='r', facecolor='none')
-            axs[1,3].add_patch(rect)
-
-        if(quad.is_valid and (quad.bigger_than_median) and (quad.p_value < P_VALUE_NULLHYPOTHESIS)):
-            y = np.argwhere(cols == quad.position[1])*2-0.5
-            x =  np.argwhere(rows == quad.position[0])*4 -0.5
-            w = 2
-            h = 4
-            rect = patches.Rectangle((y-.1, x-.1),w, h, linewidth=1.5, edgecolor='g', facecolor='none')
-            axs[2,3].add_patch(rect)
-        if(quad.is_valid == False):
-            y = np.argwhere(cols == quad.position[1])*2-0.5
-            x =  np.argwhere(rows == quad.position[0])*4 -0.5
-            w = 2
-            h = 4
-            rect = patches.Rectangle((y, x),w, h, linewidth=1.5, edgecolor='r', facecolor='none')
-            axs[2,3].add_patch(rect)"""
     plt.tight_layout()
     plt.savefig(log_dir, dpi = 300)
     plt.show()
